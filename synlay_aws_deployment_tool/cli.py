@@ -1,3 +1,5 @@
+# coding: utf-8
+
 import click
 
 # Import the SDK
@@ -5,7 +7,7 @@ import boto3
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 
-client = boto3.client('kms')
+# client = boto3.client('kms')
 
 def create_key_pair(key_size):
     return RSA.generate(key_size)
@@ -71,24 +73,102 @@ def kms_decrypt(ciphertext_blob, chiper_text):
 #     greet = 'Howdy' if as_cowboy else 'Hello'
 #     click.echo('{0}, {1}.'.format(greet, name))
 
-@click.command()
-@click.option('--create_new_key_pair', '-ckp', is_flag=True, default=False, help='Start AWS KMS encryption/decription test.')
-@click.option('--key_size', '-ks', is_flag=False, default=1024, help='Start AWS KMS encryption/decription test.')
-# @click.argument('aws_key', default='', required=True)
-# @click.argument('aws_secret', default='', required=True)
-# def main(aws_key, aws_secret):
-def main(create_new_key_pair, key_size):
+# @click.command()
+# @click.option('--create_new_key_pair', '-ckp', is_flag=True, default=False, help='Start AWS KMS encryption/decription test.')
+# @click.option('--key_size', '-ks', is_flag=False, default=1024, help='Start AWS KMS encryption/decription test.')
+# # @click.argument('aws_key', default='', required=True)
+# # @click.argument('aws_secret', default='', required=True)
+# # def main(aws_key, aws_secret):
+# def main(create_new_key_pair, key_size):
+#     """Synlay AWS Deployment Tool"""
+#     # if create_new_key_pair:
+#     KeyPair = create_key_pair(key_size)
+
+#     (CiphertextBlob, KeyId) = kms_encrypt_private_key(KeyPair)
+#     ChiperText = encrypt(b'Hello World!', KeyPair)
+
+#     # click.echo("Decrypted: %s" % KeyPair.exportKey('PEM'))
+#     # click.echo("Decrypted: %s" % KeyPair.publickey().exportKey('PEM'))
+
+#     click.echo("Decrypted: %s" % kms_decrypt(CiphertextBlob, ChiperText))
+
+#     # greet = 'Howdy' if as_cowboy else 'Hello'
+#     click.echo('{0}, {1}.'.format(KeyId, key_size))
+
+import click
+import math
+import time
+import random
+
+try:
+    range_type = xrange
+except NameError:
+    range_type = range
+
+@click.group()
+def cli():
     """Synlay AWS Deployment Tool"""
-    # if create_new_key_pair:
-    KeyPair = create_key_pair(key_size)
+    pass
 
-    (CiphertextBlob, KeyId) = kms_encrypt_private_key(KeyPair)
-    ChiperText = encrypt(b'Hello World!', KeyPair)
+@cli.command()
+def encrypt():
+    """Shows a simple menu."""
+    menu = 'main'
+    while 1:
+        if menu == 'main':
+            click.echo('Main menu:')
+            click.echo('  d: debug menu')
+            click.echo('  q: quit')
+            char = click.getchar()
+            if char == 'd':
+                menu = 'debug'
+            elif char == 'q':
+                menu = 'quit'
+            else:
+                click.echo('Invalid input')
+        elif menu == 'debug':
+            click.echo('Debug menu')
+            click.echo('  b: back')
+            char = click.getchar()
+            if char == 'b':
+                menu = 'main'
+            else:
+                click.echo('Invalid input')
+        elif menu == 'quit':
+            return
+    click.echo('Initialized the database')
 
-    # click.echo("Decrypted: %s" % KeyPair.exportKey('PEM'))
-    # click.echo("Decrypted: %s" % KeyPair.publickey().exportKey('PEM'))
+@cli.command()
+def decrypt():
+    click.echo('Dropped the database')
 
-    click.echo("Decrypted: %s" % kms_decrypt(CiphertextBlob, ChiperText))
+@cli.command()
+def create_new_key_pair():
+    click.echo('Dropped the database')
 
-    # greet = 'Howdy' if as_cowboy else 'Hello'
-    click.echo('{0}, {1}.'.format(KeyId, key_size))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def main():
+    cli()
