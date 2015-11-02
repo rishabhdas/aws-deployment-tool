@@ -1,38 +1,43 @@
 # coding: utf-8
 
+import os
 import click
 
 # Import the SDK
 import boto3
+from boto3.s3.transfer import S3Transfer
+
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 
-# client = boto3.client('kms')
+try:
+    kmsClient = boto3.client('kms')
+except Exception, e:
+    print("Error while trying to initialize aws client: '%s'" % e)
+    exit()
 
-def create_key_pair(key_size):
-    return RSA.generate(key_size)
-    # return RSA.generate(4096)
+class SynlayAWSEncryptionContext(object):
+    def __init__(self, project, configurationDeploymentPath):
+        self._project = project
+        self._configurationDeploymentPath = configurationDeploymentPath
 
-def kms_encrypt_private_key(keypair):
-    binPrivKey = keypair.exportKey('DER')
-
-    # response = client.generate_data_key(
-    #     KeyId='alias/test-key',
-    #     EncryptionContext={
-    #         'project': 'Synlay Cloud',
-    #         'type': 'Test',
-    #     },
-    #     KeySpec='AES_256',
-    # )
-    EncryptResponse = client.encrypt(
-        KeyId='alias/test-key',
-        Plaintext=binPrivKey,
-        EncryptionContext={
-            'project': 'Synlay Cloud',
-            'type': 'Test',
+    def aws_encryption_context(self):
+        return {
+            'project': self._project,
+            'configuration_deployment_path': self._configurationDeploymentPath,
         }
+
+def create_key_pair(keySize):
+    return RSA.generate(keySize)
+
+def kms_encrypt_private_key(kmsClient, encryptionKeyPair, awsKmsKeyId, awsEncryptionContext):
+    binPrivKey = encryptionKeyPair.exportKey('DER')
+    EncryptResponse = kmsClient.encrypt(
+        KeyId=awsKmsKeyId,
+        Plaintext=binPrivKey,
+        EncryptionContext=awsEncryptionContext
     )
-    return (EncryptResponse['CiphertextBlob'], EncryptResponse['KeyId'])
+    return EncryptResponse['CiphertextBlob']
 
 def kms_decrypt_private_key(ciphertext_blob):
     DecryptResponse = client.decrypt(
@@ -95,80 +100,67 @@ def kms_decrypt(ciphertext_blob, chiper_text):
 #     # greet = 'Howdy' if as_cowboy else 'Hello'
 #     click.echo('{0}, {1}.'.format(KeyId, key_size))
 
-import click
-import math
-import time
-import random
-
-try:
-    range_type = xrange
-except NameError:
-    range_type = range
-
 @click.group()
 def cli():
-    """Synlay AWS Deployment Tool"""
+    """Synlay AWS Deployment Tool
+
+       Environment vars:
+       AWS_ACCESS_KEY_ID - The access key for your AWS account.
+       AWS_SECRET_ACCESS_KEY - The secret key for your AWS account.
+       AWS_DEFAULT_REGION - The default region to use, e.g. us-east-1.
+       AWS_PROFILE - The default credential and configuration profile to use, if any.
+    """
     pass
 
 @cli.command()
-def encrypt():
-    """Shows a simple menu."""
-    menu = 'main'
-    while 1:
-        if menu == 'main':
-            click.echo('Main menu:')
-            click.echo('  d: debug menu')
-            click.echo('  q: quit')
-            char = click.getchar()
-            if char == 'd':
-                menu = 'debug'
-            elif char == 'q':
-                menu = 'quit'
-            else:
-                click.echo('Invalid input')
-        elif menu == 'debug':
-            click.echo('Debug menu')
-            click.echo('  b: back')
-            char = click.getchar()
-            if char == 'b':
-                menu = 'main'
-            else:
-                click.echo('Invalid input')
-        elif menu == 'quit':
-            return
+def encrypt(publicKey, fileToEncrypt, laterDeploymentContext):
+    """Encrypt a given file with the public key."""
     click.echo('Initialized the database')
 
 @cli.command()
 def decrypt():
     click.echo('Dropped the database')
 
+# aws_access_key_id, aws_secret_access_key and aws_region will be determined through the environment or extracted from ~/.aws/credentials
 @cli.command()
-def create_new_key_pair():
-    click.echo('Dropped the database')
+@click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True)
+@click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
+@click.option('--key-size', '-ks', 'keySize', default=1024, type=click.IntRange(1024, 4096, clamp=True), help='Configure the key size.', required=True)
+@click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name', default='./public_key.pem', type=click.File(mode='w'), required=True, help='Path where the generated public key should be exported to.')
+@click.option('--encrypted-private-key-file', '-epkf', 'encryptedPrivateKeyFile', prompt='Encrypted private key file path and name', default='./private_key.sec', type=click.File(mode='wb'), required=True, help='Path where the generated and encrypted private key should be exported to.')
+@click.option('--configuration-deployment-path', '-cdp', 'configurationDeploymentPath', prompt='Enter the path where the future decrypted configuration file will be deployed', type=click.Path(resolve_path='True'), required=True, help='Path where final decrypted configuration file will be deployed. Parts of the path will be used to generate an ecnryption contex for the AWS KMS service.')
+@click.pass_context
+def create_new_key_pair(ctx, awsKmsKeyId, project, keySize, publicKeyFile, encryptedPrivateKeyFile, configurationDeploymentPath):
+    """Create a new encryption RSA keypair, where the private keyfile will be encrypted using the AWS KMS service."""
+    keyPair = create_key_pair(keySize)
 
+    awsEncryptionContext = SynlayAWSEncryptionContext(project, configurationDeploymentPath).aws_encryption_context()
+    ciphertextBlob = kms_encrypt_private_key(kmsClient, keyPair, awsKmsKeyId, awsEncryptionContext)
 
+    publicKeyFile.write(keyPair.publickey().exportKey('PEM'))
+    publicKeyFile.close()
+    del keyPair
+    encryptedPrivateKeyFile.write(ciphertextBlob)
+    encryptedPrivateKeyFile.close()
 
+    # if click.confirm('Do you wan\'t to upload the encrypted key file to S3?'):
+    #     ctx.forward(upload_encrypted_private_key_to_s3, privateFile=encryptedPrivateKeyFile, s3Url=None)
+    #     click.echo('Well done!')
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+@cli.command()
+@click.option('--encrypted_private_key_file', 'privateFile', prompt='Encrypted private key file path and name', default='./private_key.sec', type=click.Path(exists=True, readable=True), required=True, help='Path where the generated private key file is located.')
+@click.option('--bucket', prompt='S3 bucket to upload the encrypted file to', default='synlay-deployment-keys', required=True, help='Bucket where the encrypted private key file should be uploaded to.')
+@click.option('--bucket_key_filename', 'bucketKeyFilename', help='Filename which should be used to save the file in the bucket.')
+@click.option('--keep_private_file', '--k', 'keepPrivateFile', is_flag=True, default=False)
+def upload_encrypted_private_key_to_s3(privateFile, bucket, bucketKeyFilename, keepPrivateFile):
+    # client = boto3.client('s3', 'us-west-2')
+    client = boto3.client('s3')
+    transfer = S3Transfer(client)
+    basename = os.path.basename(privateFile)
+    bucketKeyFilename = bucketKeyFilename if not bucketKeyFilename is None else basename
+    transfer.upload_file(privateFile, bucket, bucketKeyFilename, extra_args={'ServerSideEncryption': 'AES256'})
+    if not keepPrivateFile:
+        os.remove(basename)
 
 def main():
     cli()

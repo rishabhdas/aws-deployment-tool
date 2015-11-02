@@ -4,7 +4,7 @@ Synlay AWS Deployment Tool
 from setuptools import find_packages, setup
 
 dependencies = [
-    'click',
+    'click==5.1',
     'pycrypto>=2.6.1,<2.7.0',
     'boto3>=1.2.0,<1.3.0'
 ]
