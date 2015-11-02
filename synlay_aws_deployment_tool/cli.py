@@ -39,26 +39,21 @@ def kms_encrypt_private_key(kmsClient, encryptionKeyPair, awsKmsKeyId, awsEncryp
     )
     return EncryptResponse['CiphertextBlob']
 
-def kms_decrypt_private_key(ciphertext_blob):
-    DecryptResponse = client.decrypt(
-        CiphertextBlob=ciphertext_blob,
-        EncryptionContext={
-            'project': 'Synlay Cloud',
-            'type': 'Test',
-        }
+def kms_decrypt_private_key(kmsClient, ciphertextBlob, awsEncryptionContext):
+    DecryptResponse = kmsClient.decrypt(
+        CiphertextBlob=ciphertextBlob,
+        EncryptionContext=awsEncryptionContext
     )
-    return (DecryptResponse['Plaintext'], DecryptResponse['KeyId'])
+    return RSA.importKey(DecryptResponse['Plaintext'])
 
-def encrypt(message, keypair):
-    binPubKey =  keypair.publickey().exportKey('DER')
-    pubKeyObj =  RSA.importKey(binPubKey)
-
+def encrypt_helper(message, key):
+    binPubKey = key.publickey().exportKey('DER')
+    pubKeyObj = RSA.importKey(binPubKey)
     cipher = PKCS1_OAEP.new(pubKeyObj)
     return cipher.encrypt(message)
 
-def decrypt(ciphertext, keypair):
+def decrypt_helper(ciphertext, keypair):
     binPrivKey = keypair.exportKey('DER')
-
     privKeyObj = RSA.importKey(binPrivKey)
     cipher = PKCS1_OAEP.new(privKeyObj)
     return cipher.decrypt(ciphertext)
@@ -113,9 +108,17 @@ def cli():
     pass
 
 @cli.command()
-def encrypt(publicKey, fileToEncrypt, laterDeploymentContext):
-    """Encrypt a given file with the public key."""
-    click.echo('Initialized the database')
+@click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name', default='./public_key.pem', type=click.File(mode='r'), required=True, help='Path where the generated public key is located.')
+@click.option('--file-to-encrypt', '-fte', 'fileToEncrypt', prompt='File to encrypt', type=click.File(mode='r'), required=True)
+@click.option('--encrypt-to-file', 'encryptToFile', prompt='File path and name where the chipher text should be saved', type=click.File(mode='wb'), required=True)
+@click.option('--keep_original_file', '-k', 'keepOriginalFile', is_flag=True, default=False)
+def encrypt(publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
+    """Encrypt a given file with a public key."""
+    publicKey = RSA.importKey(publicKeyFile.read())
+    encryptToFile.write(encrypt_helper(fileToEncrypt.read(), publicKey))
+    encryptToFile.close()
+    if not keepOriginalFile:
+        os.remove(fileToEncrypt.name)
 
 @cli.command()
 def decrypt():
@@ -151,16 +154,17 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, keySize, publicKeyFile, encry
 @click.option('--encrypted_private_key_file', 'privateFile', prompt='Encrypted private key file path and name', default='./private_key.sec', type=click.Path(exists=True, readable=True), required=True, help='Path where the generated private key file is located.')
 @click.option('--bucket', prompt='S3 bucket to upload the encrypted file to', default='synlay-deployment-keys', required=True, help='Bucket where the encrypted private key file should be uploaded to.')
 @click.option('--bucket_key_filename', 'bucketKeyFilename', help='Filename which should be used to save the file in the bucket.')
-@click.option('--keep_private_file', '--k', 'keepPrivateFile', is_flag=True, default=False)
-def upload_encrypted_private_key_to_s3(privateFile, bucket, bucketKeyFilename, keepPrivateFile):
+@click.option('--keep_original_file', '--k', 'keepOriginalFile', is_flag=True, default=False)
+def upload_encrypted_private_key_to_s3(privateFile, bucket, bucketKeyFilename, keepOriginalFile):
+    """Uploads the encrypted private key file to a S3 bucket."""
     # client = boto3.client('s3', 'us-west-2')
     client = boto3.client('s3')
     transfer = S3Transfer(client)
-    basename = os.path.basename(privateFile)
-    bucketKeyFilename = bucketKeyFilename if not bucketKeyFilename is None else basename
+    basename = 
+    bucketKeyFilename = bucketKeyFilename if not bucketKeyFilename is None else os.path.basename(privateFile)
     transfer.upload_file(privateFile, bucket, bucketKeyFilename, extra_args={'ServerSideEncryption': 'AES256'})
-    if not keepPrivateFile:
-        os.remove(basename)
+    if not keepOriginalFile:
+        os.remove(privateFile.name)
 
 def main():
     cli()
