@@ -37,7 +37,8 @@ To use it:
 	  data.
 
 	Options:
-	  --help  Show this message and exit.
+	  --debug  Show the stacktrace when errors occur
+	  --help   Show this message and exit.
 
 	Commands:
 	  create_new_key_pair  Create a new encryption RSA keypair, where...
