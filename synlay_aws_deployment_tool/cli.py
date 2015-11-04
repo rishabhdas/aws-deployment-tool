@@ -79,8 +79,8 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
     s3 = create_s3_resource(ctx)
     transfer = create_s3_transfer(ctx)
 
-    tmpEncryptedPrivateKey = tempfile.NamedTemporaryFile()
-    tmpEncryptedDataFile = tempfile.NamedTemporaryFile()
+    tmpEncryptedPrivateKey = tempfile.NamedTemporaryFile(delete=True)
+    tmpEncryptedDataFile = tempfile.NamedTemporaryFile(delete=True)
     try:
         ctx.obj.log_status('Downloading encrypted private key file from S3 \'s3://%s/%s\' to %s...' % (keyBucket, keyBucketFilename, tmpEncryptedPrivateKey.name))
 
@@ -115,13 +115,9 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to decrypt a file from S3: %s')
     finally:
         ctx.obj.log_status('Clean up temporary data files...')
-        # On unix systems try to delete securely with srm and ignore the exit code
-        subprocess.call(["srm", "-f", tmpEncryptedPrivateKey.name, tmpEncryptedDataFile.name])
-
-        if os.path.isfile(tmpEncryptedPrivateKey.name):
-            os.remove(tmpEncryptedPrivateKey.name)
-        if os.path.isfile(tmpEncryptedDataFile.name):
-            os.remove(tmpEncryptedDataFile.name)
+        # Delete the temporary files
+        tmpEncryptedPrivateKey.close()
+        tmpEncryptedDataFile.close()
 
 @cli.command(short_help='create new RSA encryption keypair')
 @click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True, help='The AWS KMS key id to used to encrypt/decrypt data, can also be specified through the \'SYNLAY_AWS_KMS_KEY_ID\' environment variable.')
