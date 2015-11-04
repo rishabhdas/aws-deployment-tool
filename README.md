@@ -69,4 +69,6 @@ A typical use case for this step would be a new release of the app with a new co
 
 ### 5. Decrypt the data file and private key file from a S3 bucket
 
+Typically done on the server side as a bootstrap process while deploying a new app/server instance.
+
 	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 SYNLAY_AWS_KMS_KEY_ID=alias/test-key synlay-aws-deployment-tool decrypt --project=TestApp --configuration-deployment-path=./decrypted_test_file.txt --key-bucket=synlay-deployment-keys --key-bucket-filename=test_app_private_key.sec --data-bucket=synlay-deployment-data --data-bucket-filename=encrypted_test_file.txt
