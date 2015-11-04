@@ -20,26 +20,30 @@ To use it:
     $ synlay-aws-deployment-tool --help
 
 	Usage: synlay-aws-deployment-tool [OPTIONS] COMMAND [ARGS]...
-	
+
 	  Synlay AWS Deployment Tool
-	
-	  Environment vars: AWS_ACCESS_KEY_ID - The access key for your AWS account.
+
+	  Common AWS specific configuration and credentials arguments will be
+	  determined through the environment or will be extracted from
+	  ~/.aws/credentials
+
+	  Possible environment variables:
+
+	  AWS_ACCESS_KEY_ID - The access key for your AWS account.
 	  AWS_SECRET_ACCESS_KEY - The secret key for your AWS account.
 	  AWS_DEFAULT_REGION - The default region to use, e.g. us-east-1.
 	  AWS_PROFILE - The default credential and configuration profile to use, if
-	  any.
-	
+	  any. SYNLAY_AWS_KMS_KEY_ID - The AWS KMS key id to used to encrypt/decrypt
+	  data.
+
 	Options:
 	  --help  Show this message and exit.
-	
+
 	Commands:
-	  create_new_key_pair             Create a new encryption RSA keypair,
-	                                  where...
-	  decrypt
-	  encrypt                         Encrypt a given file with a public key.
-	  upload_encrypted_private_key_to_s3
-	                                  Uploads the encrypted private key file to
-	                                  a...    
+	  create_new_key_pair  Create a new encryption RSA keypair, where...
+	  decrypt              Decrypt s3://dataBucket/dataBucketFilename...
+	  encrypt              Encrypt a given 'fileToEncrypt' with the...
+	  upload_file_to_s3    Simple file upload to a S3 bucket with server...
 
 ## Typical usage example
 
@@ -49,7 +53,7 @@ To use it:
 
 ### 2. Upload the encrypted private key file to the S3 bucket
 
-	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool upload_encrypted_private_key_to_s3 --encrypted_private_key_file=./private_key.sec --bucket=synlay-deployment-keys --bucket_key_filename=test_app_private_key.sec
+	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool upload_file_to_s3 --file=./private_key.sec --bucket=synlay-deployment-keys --bucket_filename=test_app_private_key.sec
 
 ### 3. Encrypt a data file using the public key file
 
@@ -60,7 +64,7 @@ A typical use case for this step would be a new release of the app with a new co
 
 ### 4. Upload the encrypted data file to the S3 bucket
 
-	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool upload_encrypted_private_key_to_s3 --encrypted_private_key_file=./encrypted_test_file.txt --bucket=synlay-deployment-data --bucket_key_filename=encrypted_test_file.txt
+	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool upload_file_to_s3 --file=./encrypted_test_file.txt --bucket=synlay-deployment-data --bucket_filename=encrypted_test_file.txt
 
 ### 5. Decrypt the data file and private key file from a S3 bucket
 
