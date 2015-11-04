@@ -179,7 +179,7 @@ class SynlayErrorHandler(object):
             self.log_error('Access denied while trying to access an AWS service')
         else:
             self.unkown_error(clientError, 'Some unkown AWS service error occured: %s', debug=False)
-        self.maybe_debug_exception(exception)
+        self.maybe_debug_exception(clientError)
 
     def log_error(self, message):
         click.echo(click.style(message, fg='red'))
