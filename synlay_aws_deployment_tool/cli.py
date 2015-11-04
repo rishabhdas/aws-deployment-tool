@@ -3,6 +3,7 @@
 import os
 import tempfile
 import subprocess
+import threading
 
 # Import the SDK
 import click
@@ -46,7 +47,7 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
     """Encrypt a given 'fileToEncrypt' with the 'publicKeyFile' using the RSA encryption protocol
     according to PKCS#1 OAEP. The encrypted content will be exported to 'encryptToFile'."""
 
-    ctx.obj.log_status('Encrypting data file \'%s\' with public RSA key \'%s\' and saving it to \'%s\'...' % fileToEncrypt.name, publicKeyFile.name, encryptToFile.name)
+    ctx.obj.log_status('Encrypting data file \'%s\' with public RSA key \'%s\' and saving it to \'%s\'...' % (fileToEncrypt.name, publicKeyFile.name, encryptToFile.name))
     try:
         publicKey = RSA.importKey(publicKeyFile.read())
         encryptToFile.write(encrypt_helper(fileToEncrypt.read(), publicKey))
@@ -61,7 +62,6 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
         ctx.obj.unkown_error(e, 'Some error occured while trying to encrypt a file: %s')
 
 @cli.command(short_help='decrypt files from S3 using RSA encryption')
-# @click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True, help='The AWS KMS key id to used to encrypt/decrypt data, can also be specified through the \'SYNLAY_AWS_KMS_KEY_ID\' environment variable.')
 @click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
 @click.option('--configuration-deployment-path', '-cdp', 'configurationDeploymentPath', type=click.File(mode='w'), required=True, help='Path where final decrypted data file will be exported to. Parts of the path will be used to generate an ecnryption contex for the AWS KMS service.')
 @click.option('--key-bucket', 'keyBucket', default='synlay-deployment-keys', required=True, help='Bucket where the encrypted private key file can be downloaded from.')
@@ -76,20 +76,28 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
     the decryption context prior to the decryption of 'dataBucketFilename'."""
 
     kmsClient = create_kms_client(ctx)
+    s3 = create_s3_resource(ctx)
     transfer = create_s3_transfer(ctx)
 
     tmpEncryptedPrivateKey = tempfile.NamedTemporaryFile()
     tmpEncryptedDataFile = tempfile.NamedTemporaryFile()
     try:
-        ctx.obj.log_status('Downloading encrypted private key file from S3 \'s3://%s/%s\' to %s...' % keyBucket, keyBucketFilename, tmpEncryptedPrivateKey.name)
-        transfer.download_file(keyBucket, keyBucketFilename, tmpEncryptedPrivateKey.name)
+        ctx.obj.log_status('Downloading encrypted private key file from S3 \'s3://%s/%s\' to %s...' % (keyBucket, keyBucketFilename, tmpEncryptedPrivateKey.name))
+
+        s3_transfer_progress_bar_helper('Downloading file', s3.Object(keyBucket, keyBucketFilename).content_length,
+                                        lambda progressBar: transfer.download_file(keyBucket, keyBucketFilename,
+                                                                                   tmpEncryptedPrivateKey.name, callback=progressBar))
+
         awsEncryptionContext = SynlayAWSEncryptionContext(project, configurationDeploymentPath.name).aws_encryption_context()
         ctx.obj.log_status('Decrypting private key file into memory...')
         with open(tmpEncryptedPrivateKey.name, 'r') as f:
             key = kms_decrypt_private_key(kmsClient, f.read(), awsEncryptionContext)
 
-        ctx.obj.log_status('Downloading encrypted data file from S3 \'s3://%s/%s\' to %s...' % dataBucket, dataBucketFilename, tmpEncryptedDataFile.name)
-        transfer.download_file(dataBucket, dataBucketFilename, tmpEncryptedDataFile.name)
+        ctx.obj.log_status('Downloading encrypted data file from S3 \'s3://%s/%s\' to %s...' % (dataBucket, dataBucketFilename, tmpEncryptedDataFile.name))
+
+        s3_transfer_progress_bar_helper('Downloading file', s3.Object(dataBucket, dataBucketFilename).content_length,
+                                        lambda progressBar: transfer.download_file(dataBucket, dataBucketFilename,
+                                                                                   tmpEncryptedDataFile.name, callback=progressBar))
         ctx.obj.log_status('Decrypting temporary data file into memory...')
         with open(tmpEncryptedDataFile.name, 'r') as f2:
             decryptedData = decrypt_helper(f2.read(), key)
@@ -154,16 +162,20 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, 
 @cli.command(short_help='upload a file to S3')
 @click.option('--file', prompt='File path and name', default='./private_key.sec', type=click.Path(exists=True, readable=True, resolve_path=True), required=True, help='Path where the file is located which should be uploaded to S3.')
 @click.option('--bucket', prompt='S3 bucket name to upload the file to', default='synlay-deployment-keys', required=True, help='Bucket name where the file should be uploaded to.')
-@click.option('--bucket_filename', 'bucketFilename', help='Filename which should be used to save the file in the bucket.')
+@click.option('--bucket_filename', 'bucketFilename', help='Filename which should be used to save the file in the bucket.', required=True)
 @click.option('--keep_original_file', '--k', 'keepOriginalFile', is_flag=True, default=False)
 @click.pass_context
 def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
     """Simple file upload to a S3 bucket with server side AWS256 encryption enabled."""
-    ctx.obj.log_status('Upload file \'%s\' to S3 \'s3://%s/%s\'...' % file, bucket, bucketFilename)
+    ctx.obj.log_status('Upload file \'%s\' to S3 \'s3://%s/%s\'...' % (file, bucket, bucketFilename))
     transfer = create_s3_transfer(ctx)
     try:
         bucketFilename = bucketFilename if not bucketFilename is None else os.path.basename(file)
-        transfer.upload_file(file, bucket, bucketFilename, extra_args={'ServerSideEncryption': 'AES256'})
+
+        s3_transfer_progress_bar_helper('Uploading file', os.path.getsize(file),
+                                        lambda progressBar: transfer.upload_file(file, bucket, bucketFilename,
+                                                                                 callback=progressBar,
+                                                                                 extra_args={'ServerSideEncryption': 'AES256'}))
         if not keepOriginalFile:
             # On unix systems try to delete securely with srm and ignore the exit code
             subprocess.call(["srm", "-f", file])
@@ -180,6 +192,15 @@ def main():
 # =========================================================
 #                       Internals
 # =========================================================
+
+class SynlayProgressPercentage(object):
+    def __init__(self, progressBar):
+        self.__progress_bar = progressBar
+        self._lock = threading.Lock()
+
+    def __call__(self, bytes_amount):
+        with self._lock:
+            self.__progress_bar.update(bytes_amount)
 
 class SynlayErrorHandler(object):
     def __init__(self, debug):
@@ -238,6 +259,14 @@ def create_s3_transfer(ctx):
         ctx.obj.unkown_error(e, "Error while trying to initialize aws s3 transfer: '%s'")
         exit()
 
+def create_s3_resource(ctx):
+    """Boto3 S3 resource factory"""
+    try:
+        return boto3.resource('s3')
+    except Exception, e:
+        ctx.obj.unkown_error(e, "Error while trying to initialize aws s3 resource: '%s'")
+        exit()
+
 def create_key_pair(keySize):
     """Generate a RSA key pair with 'keySize'"""
     return RSA.generate(keySize)
@@ -283,3 +312,7 @@ def decrypt_helper(ciphertext, key):
     privKeyObj = RSA.importKey(binPrivKey)
     cipher = PKCS1_OAEP.new(privKeyObj)
     return cipher.decrypt(ciphertext)
+
+def s3_transfer_progress_bar_helper(message, contentSize, transferFunc):
+    with click.progressbar(label=message, length=contentSize) as progressBar:
+        transferFunc(SynlayProgressPercentage(progressBar))
