@@ -13,7 +13,9 @@ from botocore.exceptions import ClientError
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 
-@click.group()
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+
+@click.group(context_settings=CONTEXT_SETTINGS)
 @click.option('--debug', is_flag=True, default=False, help='Show the stacktrace when errors occur')
 @click.pass_context
 def cli(ctx, debug):
@@ -25,6 +27,7 @@ def cli(ctx, debug):
 
        Possible environment variables:
 
+       \b
        AWS_ACCESS_KEY_ID - The access key for your AWS account.
        AWS_SECRET_ACCESS_KEY - The secret key for your AWS account.
        AWS_DEFAULT_REGION - The default region to use, e.g. us-east-1.
@@ -33,7 +36,7 @@ def cli(ctx, debug):
     """
     ctx.obj = SynlayErrorHandler(debug)
 
-@cli.command()
+@cli.command(short_help='encrypt files using RSA encryption')
 @click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name', default='./public_key.pem', type=click.File(mode='r'), required=True, help='Path where the generated public key is located.')
 @click.option('--file-to-encrypt', '-fte', 'fileToEncrypt', prompt='File to encrypt', type=click.File(mode='r'), required=True)
 @click.option('--encrypt-to-file', 'encryptToFile', prompt='File path and name where the chipher text should be saved', type=click.File(mode='wb'), required=True)
@@ -43,17 +46,22 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
     """Encrypt a given 'fileToEncrypt' with the 'publicKeyFile' using the RSA encryption protocol
     according to PKCS#1 OAEP. The encrypted content will be exported to 'encryptToFile'."""
 
+    ctx.obj.log_status('Encrypting data file \'%s\' with public RSA key \'%s\' and saving it to \'%s\'...' % fileToEncrypt.name, publicKeyFile.name, encryptToFile.name)
     try:
         publicKey = RSA.importKey(publicKeyFile.read())
         encryptToFile.write(encrypt_helper(fileToEncrypt.read(), publicKey))
         encryptToFile.close()
         if not keepOriginalFile:
-            os.remove(fileToEncrypt.name)
+            ctx.obj.log_status('Removing the original data file \'%s\'...' % fileToEncrypt.name)
+            # On unix systems try to delete securely with srm and ignore the exit code
+            subprocess.call(["srm", "-f", fileToEncrypt.name])
+            if os.path.isfile(fileToEncrypt.name):
+                os.remove(fileToEncrypt.name)
     except Exception, e:
         ctx.obj.unkown_error(e, 'Some error occured while trying to encrypt a file: %s')
 
-@cli.command()
-@click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True, help='The AWS KMS key id to used to encrypt/decrypt data, can also be specified through the \'SYNLAY_AWS_KMS_KEY_ID\' environment variable.')
+@cli.command(short_help='decrypt files from S3 using RSA encryption')
+# @click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True, help='The AWS KMS key id to used to encrypt/decrypt data, can also be specified through the \'SYNLAY_AWS_KMS_KEY_ID\' environment variable.')
 @click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
 @click.option('--configuration-deployment-path', '-cdp', 'configurationDeploymentPath', type=click.File(mode='w'), required=True, help='Path where final decrypted data file will be exported to. Parts of the path will be used to generate an ecnryption contex for the AWS KMS service.')
 @click.option('--key-bucket', 'keyBucket', default='synlay-deployment-keys', required=True, help='Bucket where the encrypted private key file can be downloaded from.')
@@ -61,7 +69,7 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
 @click.option('--data-bucket', 'dataBucket', default='synlay-deployment-data', required=True, help='Bucket where the encrypted data can be downloaded from.')
 @click.option('--data-bucket-filename', 'dataBucketFilename', required=True, help='Filename from the encryption file in the data bucket.')
 @click.pass_context
-def decrypt(ctx, awsKmsKeyId, project, configurationDeploymentPath, keyBucket, keyBucketFilename, dataBucket, dataBucketFilename):
+def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilename, dataBucket, dataBucketFilename):
     """Decrypt s3://dataBucket/dataBucketFilename with a private key from s3://keyBucket/keyBucketFilename using
     the RSA encryption protocol according to PKCS#1 OAEP. The private key is suposed to be encrypted with the AWS KMS service
     and will be decrypted with the 'awsKmsKeyId' and 'project'/'configurationDeploymentPath' as
@@ -73,17 +81,22 @@ def decrypt(ctx, awsKmsKeyId, project, configurationDeploymentPath, keyBucket, k
     tmpEncryptedPrivateKey = tempfile.NamedTemporaryFile()
     tmpEncryptedDataFile = tempfile.NamedTemporaryFile()
     try:
+        ctx.obj.log_status('Downloading encrypted private key file from S3 \'s3://%s/%s\' to %s...' % keyBucket, keyBucketFilename, tmpEncryptedPrivateKey.name)
         transfer.download_file(keyBucket, keyBucketFilename, tmpEncryptedPrivateKey.name)
         awsEncryptionContext = SynlayAWSEncryptionContext(project, configurationDeploymentPath.name).aws_encryption_context()
+        ctx.obj.log_status('Decrypting private key file into memory...')
         with open(tmpEncryptedPrivateKey.name, 'r') as f:
             key = kms_decrypt_private_key(kmsClient, f.read(), awsEncryptionContext)
 
+        ctx.obj.log_status('Downloading encrypted data file from S3 \'s3://%s/%s\' to %s...' % dataBucket, dataBucketFilename, tmpEncryptedDataFile.name)
         transfer.download_file(dataBucket, dataBucketFilename, tmpEncryptedDataFile.name)
+        ctx.obj.log_status('Decrypting temporary data file into memory...')
         with open(tmpEncryptedDataFile.name, 'r') as f2:
             decryptedData = decrypt_helper(f2.read(), key)
 
         # immediately remove private key from memory
         del key
+        ctx.obj.log_status('Saving decrypted data in memory into the destination file path...')
         configurationDeploymentPath.write(decryptedData)
         configurationDeploymentPath.close()
         # immediately remove decrypted data from memory
@@ -93,6 +106,7 @@ def decrypt(ctx, awsKmsKeyId, project, configurationDeploymentPath, keyBucket, k
     except Exception, e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to decrypt a file from S3: %s')
     finally:
+        ctx.obj.log_status('Clean up temporary data files...')
         # On unix systems try to delete securely with srm and ignore the exit code
         subprocess.call(["srm", "-f", tmpEncryptedPrivateKey.name, tmpEncryptedDataFile.name])
 
@@ -101,7 +115,7 @@ def decrypt(ctx, awsKmsKeyId, project, configurationDeploymentPath, keyBucket, k
         if os.path.isfile(tmpEncryptedDataFile.name):
             os.remove(tmpEncryptedDataFile.name)
 
-@cli.command()
+@cli.command(short_help='create new RSA encryption keypair')
 @click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True, help='The AWS KMS key id to used to encrypt/decrypt data, can also be specified through the \'SYNLAY_AWS_KMS_KEY_ID\' environment variable.')
 @click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
 @click.option('--configuration-deployment-path', '-cdp', 'configurationDeploymentPath', prompt='Enter the path where the future decrypted configuration file will be deployed', type=click.Path(), required=True, help='Path where final decrypted configuration file will be deployed. Parts of the path will be used to generate an ecnryption contex for the AWS KMS service.')
@@ -112,16 +126,20 @@ def decrypt(ctx, awsKmsKeyId, project, configurationDeploymentPath, keyBucket, k
 def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, keySize, publicKeyFile, encryptedPrivateKeyFile):
     """Create a new encryption RSA keypair, where the private keyfile will be encrypted using the AWS KMS service."""
     
+    ctx.obj.log_status('Creating RSA keypair...')
     kmsClient = create_kms_client(ctx)
     keyPair = create_key_pair(keySize)
     awsEncryptionContext = SynlayAWSEncryptionContext(project, configurationDeploymentPath).aws_encryption_context()
 
     try:
+        ctx.obj.log_status('Encrypting private key using AWS KMS service...')
         ciphertextBlob = kms_encrypt_private_key(kmsClient, keyPair, awsKmsKeyId, awsEncryptionContext)
 
+        ctx.obj.log_status('Saving public key \'%s\' to the filesystem...' % publicKeyFile.name)
         publicKeyFile.write(keyPair.publickey().exportKey('PEM'))
         publicKeyFile.close()
         del keyPair
+        ctx.obj.log_status('Saving encrypted private key \'%s\' to the filesystem...' % encryptedPrivateKeyFile.name)
         encryptedPrivateKeyFile.write(ciphertextBlob)
         encryptedPrivateKeyFile.close()
 
@@ -133,7 +151,7 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, 
     except Exception, e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to create a new RSA keypair: %s')
 
-@cli.command()
+@cli.command(short_help='upload a file to S3')
 @click.option('--file', prompt='File path and name', default='./private_key.sec', type=click.Path(exists=True, readable=True, resolve_path=True), required=True, help='Path where the file is located which should be uploaded to S3.')
 @click.option('--bucket', prompt='S3 bucket name to upload the file to', default='synlay-deployment-keys', required=True, help='Bucket name where the file should be uploaded to.')
 @click.option('--bucket_filename', 'bucketFilename', help='Filename which should be used to save the file in the bucket.')
@@ -141,6 +159,7 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, 
 @click.pass_context
 def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
     """Simple file upload to a S3 bucket with server side AWS256 encryption enabled."""
+    ctx.obj.log_status('Upload file \'%s\' to S3 \'s3://%s/%s\'...' % file, bucket, bucketFilename)
     transfer = create_s3_transfer(ctx)
     try:
         bucketFilename = bucketFilename if not bucketFilename is None else os.path.basename(file)
@@ -180,6 +199,9 @@ class SynlayErrorHandler(object):
         else:
             self.unkown_error(clientError, 'Some unkown AWS service error occured: %s', debug=False)
         self.maybe_debug_exception(clientError)
+
+    def log_status(self, message):
+        click.echo(click.style(message, fg='green'))
 
     def log_error(self, message):
         click.echo(click.style(message, fg='red'))
