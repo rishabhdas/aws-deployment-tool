@@ -58,7 +58,7 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
             subprocess.call(["srm", "-f", fileToEncrypt.name])
             if os.path.isfile(fileToEncrypt.name):
                 os.remove(fileToEncrypt.name)
-    except Exception, e:
+    except Exception as e:
         ctx.obj.unkown_error(e, 'Some error occured while trying to encrypt a file: %s')
 
 @cli.command(short_help='decrypt files from S3 using RSA encryption')
@@ -109,9 +109,9 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
         configurationDeploymentPath.close()
         # immediately remove decrypted data from memory
         del decryptedData
-    except ClientError, ce:
+    except ClientError as ce:
         ctx.obj.aws_client_error(ce)
-    except Exception, e:
+    except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to decrypt a file from S3: %s')
     finally:
         ctx.obj.log_status('Clean up temporary data files...')
@@ -129,7 +129,7 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
 @click.pass_context
 def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, keySize, publicKeyFile, encryptedPrivateKeyFile):
     """Create a new encryption RSA keypair, where the private keyfile will be encrypted using the AWS KMS service."""
-    
+
     ctx.obj.log_status('Creating RSA keypair...')
     kmsClient = create_kms_client(ctx)
     keyPair = create_key_pair(keySize)
@@ -150,9 +150,9 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, 
         # if click.confirm('Do you wan\'t to upload the encrypted key file to S3?'):
         #     ctx.forward(upload_encrypted_private_key_to_s3, privateFile=encryptedPrivateKeyFile, s3Url=None)
         #     click.echo('Well done!')
-    except ClientError, ce:
+    except ClientError as ce:
         ctx.obj.aws_client_error(ce)
-    except Exception, e:
+    except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to create a new RSA keypair: %s')
 
 @cli.command(short_help='upload a file to S3')
@@ -177,9 +177,9 @@ def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
             subprocess.call(["srm", "-f", file])
             if os.path.isfile(file):
                 os.remove(file)
-    except ClientError, ce:
+    except ClientError as ce:
         ctx.obj.aws_client_error(ce)
-    except Exception, e:
+    except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to upload a file to S3: %s')
 
 def main():
@@ -242,7 +242,7 @@ def create_kms_client(ctx):
     """Boto3 KMS client factory"""
     try:
         return boto3.client('kms')
-    except Exception, e:
+    except Exception as e:
         ctx.obj.unkown_error(e, "Error while trying to initialize aws kms client: '%s'")
         exit()
 
@@ -251,7 +251,7 @@ def create_s3_transfer(ctx):
     try:
         client = boto3.client('s3')
         return S3Transfer(client)
-    except Exception, e:
+    except Exception as e:
         ctx.obj.unkown_error(e, "Error while trying to initialize aws s3 transfer: '%s'")
         exit()
 
@@ -259,7 +259,7 @@ def create_s3_resource(ctx):
     """Boto3 S3 resource factory"""
     try:
         return boto3.resource('s3')
-    except Exception, e:
+    except Exception as e:
         ctx.obj.unkown_error(e, "Error while trying to initialize aws s3 resource: '%s'")
         exit()
 
