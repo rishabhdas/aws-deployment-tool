@@ -1,3 +1,5 @@
+# coding: utf-8
+
 import pytest
 from click.testing import CliRunner
 from synlay_aws_deployment_tool import cli
