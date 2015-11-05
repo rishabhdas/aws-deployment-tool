@@ -20,6 +20,8 @@ def test_create_new_encryption_keys(runner):
                                          '--configuration-deployment-path=decrypted_test_file.txt',
                                          '--public-key-file=public_key.pem',
                                          '--encrypted-private-key-file=private_key.sec', '-ks=1024'])
+        assert result.exit_code == 0
+
         assert os.path.isfile('public_key.pem')
         assert os.path.isfile('private_key.sec')
 
@@ -37,8 +39,6 @@ def test_create_new_encryption_keys(runner):
         with pytest.raises(ValueError):
             with open('private_key.sec', 'r') as f:
                 RSA.importKey(f.read())
-
-        assert result.exit_code == 0
 
 # def test_cli(runner):
 #     result = runner.invoke(cli.main)

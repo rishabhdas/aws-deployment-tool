@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import sys
 import os
 import tempfile
 import subprocess
@@ -60,6 +61,7 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
                 os.remove(fileToEncrypt.name)
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some error occured while trying to encrypt a file: %s')
+        sys.exit()
 
 @cli.command(short_help='decrypt files from S3 using RSA encryption')
 @click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
@@ -111,8 +113,10 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
         del decryptedData
     except ClientError as ce:
         ctx.obj.aws_client_error(ce)
+        sys.exit()
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to decrypt a file from S3: %s')
+        sys.exit()
     finally:
         ctx.obj.log_status('Clean up temporary data files...')
         # Delete the temporary files
@@ -152,8 +156,10 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, 
         #     click.echo('Well done!')
     except ClientError as ce:
         ctx.obj.aws_client_error(ce)
+        sys.exit()
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to create a new RSA keypair: %s')
+        sys.exit()
 
 @cli.command(short_help='upload a file to S3')
 @click.option('--file', prompt='File path and name', default='./private_key.sec', type=click.Path(exists=True, readable=True, resolve_path=True), required=True, help='Path where the file is located which should be uploaded to S3.')
@@ -179,8 +185,10 @@ def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
                 os.remove(file)
     except ClientError as ce:
         ctx.obj.aws_client_error(ce)
+        sys.exit()
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to upload a file to S3: %s')
+        sys.exit()
 
 def main():
     cli(obj=None)
