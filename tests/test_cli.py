@@ -22,10 +22,6 @@ def test_create_new_encryption_keys(runner):
                                          '--configuration-deployment-path=decrypted_test_file.txt',
                                          '--public-key-file=public_key.pem',
                                          '--encrypted-private-key-file=private_key.sec', '-ks=1024'])
-        import subprocess
-        import locale
-        locale.setlocale(locale.LC_ALL, 'de_DE.UTF-8')
-        # raise Exception(subprocess.check_output('locale'))
         assert result.exit_code == 0
 
         assert os.path.isfile('public_key.pem')
