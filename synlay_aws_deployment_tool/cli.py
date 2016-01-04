@@ -45,10 +45,16 @@ def cli(ctx, debug):
 
 
 @cli.command(short_help='encrypt files using RSA encryption')
-@click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name', default='./public_key.pem', type=click.File(mode='r'), required=True, help='Path where the generated public key is located.')
-@click.option('--file-to-encrypt', '-fte', 'fileToEncrypt', prompt='File to encrypt', type=click.File(mode='r'), required=True)
-@click.option('--encrypt-to-file', 'encryptToFile', prompt='File path and name where the chipher text should be saved', type=click.File(mode='wb'), required=True)
-@click.option('--aes-key-size', 'aesKeySize', prompt='AES key size in bytes - 16 (AES-128), 24 (AES-192), or 32 (AES-256)', type=click.Choice([16, 24, 32]), default=32)
+@click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name',
+              default='./public_key.pem', type=click.File(mode='r'), required=True,
+              help='Path where the generated public key is located.')
+@click.option('--file-to-encrypt', '-fte', 'fileToEncrypt', prompt='File to encrypt', type=click.File(mode='r'),
+              required=True)
+@click.option('--encrypt-to-file', 'encryptToFile', prompt='File path and name where the chipher text should be saved',
+              type=click.File(mode='wb'), required=True)
+@click.option('--aes-key-size', 'aesKeySize',
+              prompt='AES key size in bytes - 16 (AES-128), 24 (AES-192), or 32 (AES-256)',
+              type=click.Choice([16, 24, 32]), default=32)
 @click.option('--keep_original_file', '-k', 'keepOriginalFile', is_flag=True, default=False)
 @click.pass_context
 def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, aesKeySize, keepOriginalFile):
@@ -59,7 +65,8 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, aesKeySize, keepOr
     to 'encryptToFile' and includes the initialization vector alongside with
     the AWS key cipher length and the encrypted AES key itself.
     """
-    ctx.obj.log_status('Encrypting data file \'%s\' with public RSA key \'%s\' and saving it to \'%s\'...' % (fileToEncrypt.name, publicKeyFile.name, encryptToFile.name))
+    ctx.obj.log_status('Encrypting data file \'%s\' with public RSA key \'%s\' and saving it to \'%s\'...' %
+                       (fileToEncrypt.name, publicKeyFile.name, encryptToFile.name))
     try:
         publicKey = RSA.importKey(publicKeyFile.read())
         encryptToFile.write(encrypt_helper(fileToEncrypt.read(), publicKey, aesKeySize))
@@ -76,12 +83,19 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, aesKeySize, keepOr
 
 
 @cli.command(short_help='decrypt files from S3 using RSA encryption')
-@click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
-@click.option('--configuration-deployment-path', '-cdp', 'configurationDeploymentPath', type=click.File(mode='w'), required=True, help='Path where final decrypted data file will be exported to. Parts of the path will be used to generate an ecnryption contex for the AWS KMS service.')
-@click.option('--key-bucket', 'keyBucket', default='synlay-deployment-keys', required=True, help='Bucket where the encrypted private key file can be downloaded from.')
-@click.option('--key-bucket-filename', 'keyBucketFilename', required=True, help='Filename from the encryption key in the key bucket.')
-@click.option('--data-bucket', 'dataBucket', default='synlay-deployment-data', required=True, help='Bucket where the encrypted data can be downloaded from.')
-@click.option('--data-bucket-filename', 'dataBucketFilename', required=True, help='Filename from the encryption file in the data bucket.')
+@click.option('--project', '-p', prompt='Enter the project name',
+              help='Used as part of the encryption context of the AWS KMS service.', required=True)
+@click.option('--configuration-deployment-path', '-cdp', 'configurationDeploymentPath', type=click.File(mode='w'),
+              required=True, help='Path where final decrypted data file will be exported to. Parts of the path will be '
+                                  'used to generate an ecnryption contex for the AWS KMS service.')
+@click.option('--key-bucket', 'keyBucket', default='synlay-deployment-keys', required=True,
+              help='Bucket where the encrypted private key file can be downloaded from.')
+@click.option('--key-bucket-filename', 'keyBucketFilename', required=True,
+              help='Filename from the encryption key in the key bucket.')
+@click.option('--data-bucket', 'dataBucket', default='synlay-deployment-data', required=True,
+              help='Bucket where the encrypted data can be downloaded from.')
+@click.option('--data-bucket-filename', 'dataBucketFilename', required=True,
+              help='Filename from the encryption file in the data bucket.')
 @click.pass_context
 def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilename, dataBucket, dataBucketFilename):
     """Hybrid decryption of s3://dataBucket/dataBucketFilename, where the actual encrypted AES encryption key,
@@ -98,22 +112,27 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
     tmpEncryptedPrivateKey = tempfile.NamedTemporaryFile(delete=True)
     tmpEncryptedDataFile = tempfile.NamedTemporaryFile(delete=True)
     try:
-        ctx.obj.log_status('Downloading encrypted private key file from S3 \'s3://%s/%s\' to %s...' % (keyBucket, keyBucketFilename, tmpEncryptedPrivateKey.name))
+        ctx.obj.log_status('Downloading encrypted private key file from S3 \'s3://%s/%s\' to %s...' %
+                           (keyBucket, keyBucketFilename, tmpEncryptedPrivateKey.name))
 
         s3_transfer_progress_bar_helper('Downloading file', s3.Object(keyBucket, keyBucketFilename).content_length,
                                         lambda progressBar: transfer.download_file(keyBucket, keyBucketFilename,
-                                                                                   tmpEncryptedPrivateKey.name, callback=progressBar))
+                                                                                   tmpEncryptedPrivateKey.name,
+                                                                                   callback=progressBar))
 
-        awsEncryptionContext = SynlayAWSEncryptionContext(project, configurationDeploymentPath.name).aws_encryption_context()
+        awsEncryptionContext = SynlayAWSEncryptionContext(project,
+                                                          configurationDeploymentPath.name).aws_encryption_context()
         ctx.obj.log_status('Decrypting private key file into memory...')
         with open(tmpEncryptedPrivateKey.name, 'r') as f:
             key = kms_decrypt_private_key(kmsClient, f.read(), awsEncryptionContext)
 
-        ctx.obj.log_status('Downloading encrypted data file from S3 \'s3://%s/%s\' to %s...' % (dataBucket, dataBucketFilename, tmpEncryptedDataFile.name))
+        ctx.obj.log_status('Downloading encrypted data file from S3 \'s3://%s/%s\' to %s...' %
+                           (dataBucket, dataBucketFilename, tmpEncryptedDataFile.name))
 
         s3_transfer_progress_bar_helper('Downloading file', s3.Object(dataBucket, dataBucketFilename).content_length,
                                         lambda progressBar: transfer.download_file(dataBucket, dataBucketFilename,
-                                                                                   tmpEncryptedDataFile.name, callback=progressBar))
+                                                                                   tmpEncryptedDataFile.name,
+                                                                                   callback=progressBar))
         ctx.obj.log_status('Decrypting temporary data file into memory...')
         with open(tmpEncryptedDataFile.name, 'r') as f2:
             decryptedData = decrypt_helper(f2.read(), key)
@@ -139,14 +158,27 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
 
 
 @cli.command(short_help='create new RSA encryption keypair')
-@click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True, help='The AWS KMS key id to used to encrypt/decrypt data, can also be specified through the \'SYNLAY_AWS_KMS_KEY_ID\' environment variable.')
-@click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
-@click.option('--configuration-deployment-path', '-cdp', 'configurationDeploymentPath', prompt='Enter the path where the future decrypted configuration file will be deployed', type=click.Path(), required=True, help='Path where final decrypted configuration file will be deployed. Parts of the path will be used to generate an ecnryption contex for the AWS KMS service.')
-@click.option('--key-size', '-ks', 'keySize', default=4096, type=click.IntRange(1024, 4096, clamp=True), help='Configure the key size.', required=True)
-@click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name', default='./public_key.pem', type=click.File(mode='w'), required=True, help='Path where the generated public key should be exported to.')
-@click.option('--encrypted-private-key-file', '-epkf', 'encryptedPrivateKeyFile', prompt='Encrypted private key file path and name', default='./private_key.sec', type=click.File(mode='wb'), required=True, help='Path where the generated and encrypted private key should be exported to.')
+@click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True,
+              help='The AWS KMS key id to used to encrypt/decrypt data, can also be specified through the '
+                   '\'SYNLAY_AWS_KMS_KEY_ID\' environment variable.')
+@click.option('--project', '-p', prompt='Enter the project name',
+              help='Used as part of the encryption context of the AWS KMS service.', required=True)
+@click.option('--configuration-deployment-path', '-cdp', 'configurationDeploymentPath',
+              prompt='Enter the path where the future decrypted configuration file will be deployed', type=click.Path(),
+              required=True, help='Path where final decrypted configuration file will be deployed. Parts of the path '
+                                  'will be used to generate an ecnryption contex for the AWS KMS service.')
+@click.option('--key-size', '-ks', 'keySize', default=4096, type=click.IntRange(1024, 4096, clamp=True),
+              help='Configure the key size.', required=True)
+@click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name',
+              default='./public_key.pem', type=click.File(mode='w'), required=True,
+              help='Path where the generated public key should be exported to.')
+@click.option('--encrypted-private-key-file', '-epkf', 'encryptedPrivateKeyFile',
+              prompt='Encrypted private key file path and name', default='./private_key.sec',
+              type=click.File(mode='wb'), required=True,
+              help='Path where the generated and encrypted private key should be exported to.')
 @click.pass_context
-def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, keySize, publicKeyFile, encryptedPrivateKeyFile):
+def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, keySize, publicKeyFile,
+                        encryptedPrivateKeyFile):
     """Create a new encryption RSA keypair, where the private keyfile will be encrypted using the AWS KMS service."""
 
     ctx.obj.log_status('Creating RSA keypair...')
@@ -178,9 +210,13 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, 
 
 
 @cli.command(short_help='upload a file to S3')
-@click.option('--file', prompt='File path and name', default='./private_key.sec', type=click.Path(exists=True, readable=True, resolve_path=True), required=True, help='Path where the file is located which should be uploaded to S3.')
-@click.option('--bucket', prompt='S3 bucket name to upload the file to', default='synlay-deployment-keys', required=True, help='Bucket name where the file should be uploaded to.')
-@click.option('--bucket_filename', 'bucketFilename', help='Filename which should be used to save the file in the bucket.', required=True)
+@click.option('--file', prompt='File path and name', default='./private_key.sec',
+              type=click.Path(exists=True, readable=True, resolve_path=True), required=True,
+              help='Path where the file is located which should be uploaded to S3.')
+@click.option('--bucket', prompt='S3 bucket name to upload the file to', default='synlay-deployment-keys',
+              required=True, help='Bucket name where the file should be uploaded to.')
+@click.option('--bucket_filename', 'bucketFilename',
+              help='Filename which should be used to save the file in the bucket.', required=True)
 @click.option('--keep_original_file', '--k', 'keepOriginalFile', is_flag=True, default=False)
 @click.pass_context
 def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
@@ -193,7 +229,8 @@ def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
         s3_transfer_progress_bar_helper('Uploading file', os.path.getsize(file),
                                         lambda progressBar: transfer.upload_file(file, bucket, bucketFilename,
                                                                                  callback=progressBar,
-                                                                                 extra_args={'ServerSideEncryption': 'AES256'}))
+                                                                                 extra_args={'ServerSideEncryption':
+                                                                                             'AES256'}))
         if not keepOriginalFile:
             # On unix systems try to delete securely with srm and ignore the exit code
             subprocess.call(["srm", "-f", file])
