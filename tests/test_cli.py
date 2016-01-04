@@ -12,8 +12,9 @@ from hypothesis import given
 import hypothesis.strategies as st
 
 
-@pytest.fixture(params=[ (rsa_key_size, aes_key_size) for rsa_key_size in [1024, 2048, 4096]
-                                                      for aes_key_size in [16, 24, 32]])
+@pytest.fixture(params=[(rsa_key_size, aes_key_size)
+                        for rsa_key_size in [1024, 2048, 4096]
+                        for aes_key_size in [16, 24, 32]])
 def context(request):
     return {
         'runner': CliRunner(),
@@ -50,7 +51,7 @@ def test_create_new_encryption_keys(context):
         try:
             with open('public_key.pem', 'r') as f:
                 key = RSA.importKey(f.read())
-        except Exception as e:
+        except Exception:
             pytest.fail("Importing RSA public key failed")
 
         assert not key.has_private()

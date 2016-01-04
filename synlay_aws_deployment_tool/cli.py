@@ -397,9 +397,9 @@ def decrypt_helper(cipherblob, key):
     rsaCipher = PKCS1_OAEP.new(privKeyObj)
 
     iv = cipherblob[:AES.block_size]
-    packedAesKeyCipherLength = cipherblob[AES.block_size : AES.block_size + 4]
+    packedAesKeyCipherLength = cipherblob[AES.block_size:AES.block_size + 4]
     (AesKeyCipherLength, ) = struct.unpack(">I", packedAesKeyCipherLength)
-    encryptedAesKey = cipherblob[AES.block_size + 4 : AES.block_size + 4 + AesKeyCipherLength]
+    encryptedAesKey = cipherblob[AES.block_size + 4:AES.block_size + 4 + AesKeyCipherLength]
     encryptedMessage = cipherblob[AES.block_size + 4 + AesKeyCipherLength:]
 
     aesKey = rsaCipher.decrypt(encryptedAesKey)
