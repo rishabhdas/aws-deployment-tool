@@ -54,7 +54,7 @@ def cli(ctx, debug):
               type=click.File(mode='wb'), required=True)
 @click.option('--aes-key-size', 'aesKeySize',
               prompt='AES key size in bytes - 16 (AES-128), 24 (AES-192), or 32 (AES-256)',
-              type=click.Choice([16, 24, 32]), default=32)
+              type=click.Choice(['16', '24', '32']), default='32')
 @click.option('--keep_original_file', '-k', 'keepOriginalFile', is_flag=True, default=False)
 @click.pass_context
 def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, aesKeySize, keepOriginalFile):
@@ -69,7 +69,7 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, aesKeySize, keepOr
                        (fileToEncrypt.name, publicKeyFile.name, encryptToFile.name))
     try:
         publicKey = RSA.importKey(publicKeyFile.read())
-        encryptToFile.write(encrypt_helper(fileToEncrypt.read(), publicKey, aesKeySize))
+        encryptToFile.write(encrypt_helper(fileToEncrypt.read(), publicKey, int(aesKeySize)))
         encryptToFile.close()
         if not keepOriginalFile:
             ctx.obj.log_status('Removing the original data file \'%s\'...' % fileToEncrypt.name)
