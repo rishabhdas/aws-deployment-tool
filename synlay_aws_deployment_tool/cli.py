@@ -224,7 +224,7 @@ def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
     ctx.obj.log_status('Upload file \'%s\' to S3 \'s3://%s/%s\'...' % (file, bucket, bucketFilename))
     transfer = create_s3_transfer(ctx)
     try:
-        bucketFilename = bucketFilename if not bucketFilename is None else os.path.basename(file)
+        bucketFilename = bucketFilename if bucketFilename is not None else os.path.basename(file)
 
         s3_transfer_progress_bar_helper('Uploading file', os.path.getsize(file),
                                         lambda progressBar: transfer.upload_file(file, bucket, bucketFilename,
