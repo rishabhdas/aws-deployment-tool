@@ -21,6 +21,7 @@ import struct
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
+
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.option('--debug', is_flag=True, default=False, help='Show the stacktrace when errors occur')
 @click.pass_context
@@ -41,6 +42,7 @@ def cli(ctx, debug):
        SYNLAY_AWS_KMS_KEY_ID - The AWS KMS key id to used to encrypt/decrypt data.
     """
     ctx.obj = SynlayErrorHandler(debug)
+
 
 @cli.command(short_help='encrypt files using RSA encryption')
 @click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name', default='./public_key.pem', type=click.File(mode='r'), required=True, help='Path where the generated public key is located.')
@@ -71,6 +73,7 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, aesKeySize, keepOr
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some error occured while trying to encrypt a file: %s')
         sys.exit()
+
 
 @cli.command(short_help='decrypt files from S3 using RSA encryption')
 @click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
@@ -134,6 +137,7 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
         tmpEncryptedPrivateKey.close()
         tmpEncryptedDataFile.close()
 
+
 @cli.command(short_help='create new RSA encryption keypair')
 @click.option('--aws-kms-key-id', 'awsKmsKeyId', envvar='SYNLAY_AWS_KMS_KEY_ID', required=True, help='The AWS KMS key id to used to encrypt/decrypt data, can also be specified through the \'SYNLAY_AWS_KMS_KEY_ID\' environment variable.')
 @click.option('--project', '-p', prompt='Enter the project name', help='Used as part of the encryption context of the AWS KMS service.', required=True)
@@ -172,6 +176,7 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, 
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to create a new RSA keypair: %s')
         sys.exit()
 
+
 @cli.command(short_help='upload a file to S3')
 @click.option('--file', prompt='File path and name', default='./private_key.sec', type=click.Path(exists=True, readable=True, resolve_path=True), required=True, help='Path where the file is located which should be uploaded to S3.')
 @click.option('--bucket', prompt='S3 bucket name to upload the file to', default='synlay-deployment-keys', required=True, help='Bucket name where the file should be uploaded to.')
@@ -201,12 +206,14 @@ def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to upload a file to S3: %s')
         sys.exit()
 
+
 def main():
     cli(obj=None)
 
 # =========================================================
 #                       Internals
 # =========================================================
+
 
 class SynlayProgressPercentage(object):
     def __init__(self, progressBar):
@@ -216,6 +223,7 @@ class SynlayProgressPercentage(object):
     def __call__(self, bytes_amount):
         with self._lock:
             self.__progress_bar.update(bytes_amount)
+
 
 class SynlayErrorHandler(object):
     def __init__(self, debug):
@@ -246,6 +254,7 @@ class SynlayErrorHandler(object):
         if self.debug:
             raise exception
 
+
 class SynlayAWSEncryptionContext(object):
     def __init__(self, project, configurationDeploymentPath):
         self._project = project
@@ -257,6 +266,7 @@ class SynlayAWSEncryptionContext(object):
             'configuration_deployment_path': self._configurationDeploymentPath,
         }
 
+
 def create_kms_client(ctx):
     """Boto3 KMS client factory"""
     try:
@@ -264,6 +274,7 @@ def create_kms_client(ctx):
     except Exception as e:
         ctx.obj.unkown_error(e, "Error while trying to initialize aws kms client: '%s'")
         exit()
+
 
 def create_s3_transfer(ctx):
     """Boto3 S3 transfer factory"""
@@ -274,6 +285,7 @@ def create_s3_transfer(ctx):
         ctx.obj.unkown_error(e, "Error while trying to initialize aws s3 transfer: '%s'")
         exit()
 
+
 def create_s3_resource(ctx):
     """Boto3 S3 resource factory"""
     try:
@@ -282,9 +294,11 @@ def create_s3_resource(ctx):
         ctx.obj.unkown_error(e, "Error while trying to initialize aws s3 resource: '%s'")
         exit()
 
+
 def create_key_pair(keySize):
     """Generate a RSA key pair with 'keySize'"""
     return RSA.generate(keySize)
+
 
 def kms_encrypt_private_key(kmsClient, encryptionKeyPair, awsKmsKeyId, awsEncryptionContext):
     """Encrypt the private key from 'encryptionKeyPair' through the AWS KMS service
@@ -298,6 +312,7 @@ def kms_encrypt_private_key(kmsClient, encryptionKeyPair, awsKmsKeyId, awsEncryp
     )
     return EncryptResponse['CiphertextBlob']
 
+
 def kms_decrypt_private_key(kmsClient, ciphertextBlob, awsEncryptionContext):
     """Decrypt the private key defined as 'ciphertextBlob' through the AWS KMS service
     with the 'awsEncryptionContext'
@@ -307,6 +322,7 @@ def kms_decrypt_private_key(kmsClient, ciphertextBlob, awsEncryptionContext):
         EncryptionContext=awsEncryptionContext
     )
     return RSA.importKey(DecryptResponse['Plaintext'])
+
 
 def encrypt_helper(message, key, aesKeySize):
     """Symetric AES encryption of 'message' with a randomly generated key
@@ -331,6 +347,7 @@ def encrypt_helper(message, key, aesKeySize):
 
     return iv + packedAesKeyCipherLength + rsaCipher.encrypt(aesKey) + aesCipher.encrypt(message)
 
+
 def decrypt_helper(cipherblob, key):
     """Decrypts the actual encrypted AES encryption key with the private
     key part from 'key' using the RSA encryption protocol according
@@ -352,6 +369,7 @@ def decrypt_helper(cipherblob, key):
     aesCipher = AES.new(aesKey, AES.MODE_CFB, iv)
 
     return aesCipher.decrypt(encryptedMessage)
+
 
 def s3_transfer_progress_bar_helper(message, contentSize, transferFunc):
     with click.progressbar(label=message, length=contentSize) as progressBar:

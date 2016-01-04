@@ -11,6 +11,7 @@ from Crypto.PublicKey import RSA
 from hypothesis import given
 import hypothesis.strategies as st
 
+
 @pytest.fixture(params=[ (rsa_key_size, aes_key_size) for rsa_key_size in [1024, 2048, 4096]
                                                       for aes_key_size in [16, 24, 32]])
 def context(request):
@@ -21,12 +22,14 @@ def context(request):
         'aes_key_size': request.param[1]
     }
 
+
 @given(message=st.text(min_size=1))
 def test_encrypt_decrypt(context, message):
     rsaKey = context['rsa_key']
     assert cli.decrypt_helper(cli.encrypt_helper(message.encode('ascii', 'xmlcharrefreplace'),
                                                  rsaKey, context['aes_key_size']),
                               rsaKey) == message.encode('ascii', 'xmlcharrefreplace')
+
 
 def test_create_new_encryption_keys(context):
 
