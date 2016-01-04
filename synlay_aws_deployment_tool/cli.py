@@ -15,6 +15,10 @@ from botocore.exceptions import ClientError
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
 
+from Crypto.Cipher import AES
+from Crypto import Random
+import struct
+
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
 @click.group(context_settings=CONTEXT_SETTINGS)
@@ -42,16 +46,21 @@ def cli(ctx, debug):
 @click.option('--public-key-file', '-pkf', 'publicKeyFile', prompt='Public key file path and name', default='./public_key.pem', type=click.File(mode='r'), required=True, help='Path where the generated public key is located.')
 @click.option('--file-to-encrypt', '-fte', 'fileToEncrypt', prompt='File to encrypt', type=click.File(mode='r'), required=True)
 @click.option('--encrypt-to-file', 'encryptToFile', prompt='File path and name where the chipher text should be saved', type=click.File(mode='wb'), required=True)
+@click.option('--aes-key-size', 'aesKeySize', prompt='AES key size in bytes - 16 (AES-128), 24 (AES-192), or 32 (AES-256)', type=click.Choice([16, 24, 32]), default=32)
 @click.option('--keep_original_file', '-k', 'keepOriginalFile', is_flag=True, default=False)
 @click.pass_context
-def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
-    """Encrypt a given 'fileToEncrypt' with the 'publicKeyFile' using the RSA encryption protocol
-    according to PKCS#1 OAEP. The encrypted content will be exported to 'encryptToFile'."""
-
+def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, aesKeySize, keepOriginalFile):
+    """Symetric AES encryption of 'fileToEncrypt' with a randomly generated key
+    of the size 'aesKeySize'. The randomly generated encription key will
+    be encrypted with 'publicKeyFile' using the RSA encryption protocol
+    according to PKCS#1 OAEP. The encrypted ciphertext blob will be exported
+    to 'encryptToFile' and includes the initialization vector alongside with
+    the AWS key cipher length and the encrypted AES key itself.
+    """
     ctx.obj.log_status('Encrypting data file \'%s\' with public RSA key \'%s\' and saving it to \'%s\'...' % (fileToEncrypt.name, publicKeyFile.name, encryptToFile.name))
     try:
         publicKey = RSA.importKey(publicKeyFile.read())
-        encryptToFile.write(encrypt_helper(fileToEncrypt.read(), publicKey))
+        encryptToFile.write(encrypt_helper(fileToEncrypt.read(), publicKey, aesKeySize))
         encryptToFile.close()
         if not keepOriginalFile:
             ctx.obj.log_status('Removing the original data file \'%s\'...' % fileToEncrypt.name)
@@ -72,11 +81,13 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, keepOriginalFile):
 @click.option('--data-bucket-filename', 'dataBucketFilename', required=True, help='Filename from the encryption file in the data bucket.')
 @click.pass_context
 def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilename, dataBucket, dataBucketFilename):
-    """Decrypt s3://dataBucket/dataBucketFilename with a private key from s3://keyBucket/keyBucketFilename using
-    the RSA encryption protocol according to PKCS#1 OAEP. The private key is suposed to be encrypted with the AWS KMS service
-    and will be decrypted with the 'awsKmsKeyId' and 'project'/'configurationDeploymentPath' as
-    the decryption context prior to the decryption of 'dataBucketFilename'."""
-
+    """Hybrid decryption of s3://dataBucket/dataBucketFilename, where the actual encrypted AES encryption key,
+    which is also part of 'dataBucketFilename', will be decrypted with a private key
+    from s3://keyBucket/keyBucketFilename using the RSA encryption protocol according to PKCS#1 OAEP. The private key is
+    suposed to be encrypted with the AWS KMS service and will be decrypted with the 'awsKmsKeyId' and
+    'project'/'configurationDeploymentPath' as the decryption context prior to the decryption of 'dataBucketFilename'.
+    The actual decrypted blob will be saved under 'project'/'configurationDeploymentPath'.
+    """
     kmsClient = create_kms_client(ctx)
     s3 = create_s3_resource(ctx)
     transfer = create_s3_transfer(ctx)
@@ -297,25 +308,50 @@ def kms_decrypt_private_key(kmsClient, ciphertextBlob, awsEncryptionContext):
     )
     return RSA.importKey(DecryptResponse['Plaintext'])
 
-def encrypt_helper(message, key):
-    """Encrypt 'message' with the public key part from 'key' using
-    the RSA encryption protocol according to PKCS#1 OAEP
-    @return encrypted ciphertext blob
+def encrypt_helper(message, key, aesKeySize):
+    """Symetric AES encryption of 'message' with a randomly generated key
+    of the size 'aesKeySize'. The randomly generated encription key will
+    be encrypted with the public key part from 'key' using the RSA
+    encryption protocol according to PKCS#1 OAEP.
+    @return encrypted ciphertext blob including the initialization vector
+            alongside with the 'aesKeyCipherLength' and the encrypted
+            'aesKey';
+            blob = <iv:AES.block_size> + <aesKeyCipherLength:4> +
+                   <encryptedAesKey:aesKeyCipherLength>) + <encryptedMessage:var>
     """
     binPubKey = key.publickey().exportKey('DER')
     pubKeyObj = RSA.importKey(binPubKey)
-    cipher = PKCS1_OAEP.new(pubKeyObj)
-    return cipher.encrypt(message)
+    rsaCipher = PKCS1_OAEP.new(pubKeyObj)
 
-def decrypt_helper(ciphertext, key):
-    """Decrypt 'ciphertext' with the private key part from 'key' using
-    the RSA encryption protocol according to PKCS#1 OAEP
-    @return decrypted text blob
+    # create a new random byte sequence with aesKeySize byte used as an encryption key
+    aesKey = Random.new().read(aesKeySize)
+    iv = Random.new().read(AES.block_size)
+    packedAesKeyCipherLength = struct.pack(">I", (key.publickey().size() + 1) / 8)
+    aesCipher = AES.new(aesKey, AES.MODE_CFB, iv)
+
+    return iv + packedAesKeyCipherLength + rsaCipher.encrypt(aesKey) + aesCipher.encrypt(message)
+
+def decrypt_helper(cipherblob, key):
+    """Decrypts the actual encrypted AES encryption key with the private
+    key part from 'key' using the RSA encryption protocol according
+    to PKCS#1 OAEP, which afterwards will be used to decrypt the actual
+    message blob.
+    @return The actual decrypted message blob
     """
     binPrivKey = key.exportKey('DER')
     privKeyObj = RSA.importKey(binPrivKey)
-    cipher = PKCS1_OAEP.new(privKeyObj)
-    return cipher.decrypt(ciphertext)
+    rsaCipher = PKCS1_OAEP.new(privKeyObj)
+
+    iv = cipherblob[:AES.block_size]
+    packedAesKeyCipherLength = cipherblob[AES.block_size : AES.block_size + 4]
+    (AesKeyCipherLength, ) = struct.unpack(">I", packedAesKeyCipherLength)
+    encryptedAesKey = cipherblob[AES.block_size + 4 : AES.block_size + 4 + AesKeyCipherLength]
+    encryptedMessage = cipherblob[AES.block_size + 4 + AesKeyCipherLength:]
+
+    aesKey = rsaCipher.decrypt(encryptedAesKey)
+    aesCipher = AES.new(aesKey, AES.MODE_CFB, iv)
+
+    return aesCipher.decrypt(encryptedMessage)
 
 def s3_transfer_progress_bar_helper(message, contentSize, transferFunc):
     with click.progressbar(label=message, length=contentSize) as progressBar:
