@@ -12,7 +12,8 @@ dependencies = [
 setup(
     name='synlay-aws-deployment-tool',
     version='0.1.0',
-    url='https://github.com/drobakowski/synlay-aws-deployment-tool',
+    # TODO: ADT-5 - Consider to move project as open source project to GitHub
+    url='https://stash.synlay.com/projects/DEP/repos/aws-deployment-tools',
     license='BSD',
     author='David Robakowski',
     author_email='david.robakowski@synlay.com',
