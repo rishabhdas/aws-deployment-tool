@@ -21,6 +21,8 @@ import struct
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
+# TODO: ADT-3 - Refine codebase to work with Python 3
+
 
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.option('--debug', is_flag=True, default=False, help='Show the stacktrace when errors occur')
@@ -79,7 +81,7 @@ def encrypt(ctx, publicKeyFile, fileToEncrypt, encryptToFile, aesKeySize, keepOr
                 os.remove(fileToEncrypt.name)
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some error occured while trying to encrypt a file: %s')
-        sys.exit()
+        sys.exit(1)
 
 
 @cli.command(short_help='decrypt files from S3 using RSA encryption')
@@ -146,10 +148,10 @@ def decrypt(ctx, project, configurationDeploymentPath, keyBucket, keyBucketFilen
         del decryptedData
     except ClientError as ce:
         ctx.obj.aws_client_error(ce)
-        sys.exit()
+        sys.exit(1)
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to decrypt a file from S3: %s')
-        sys.exit()
+        sys.exit(1)
     finally:
         ctx.obj.log_status('Clean up temporary data files...')
         # Delete the temporary files
@@ -203,10 +205,10 @@ def create_new_key_pair(ctx, awsKmsKeyId, project, configurationDeploymentPath, 
         #     click.echo('Well done!')
     except ClientError as ce:
         ctx.obj.aws_client_error(ce)
-        sys.exit()
+        sys.exit(1)
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to create a new RSA keypair: %s')
-        sys.exit()
+        sys.exit(1)
 
 
 @cli.command(short_help='upload a file to S3')
@@ -238,10 +240,10 @@ def upload_file_to_s3(ctx, file, bucket, bucketFilename, keepOriginalFile):
                 os.remove(file)
     except ClientError as ce:
         ctx.obj.aws_client_error(ce)
-        sys.exit()
+        sys.exit(1)
     except Exception as e:
         ctx.obj.unkown_error(e, 'Some unkown error occured while trying to upload a file to S3: %s')
-        sys.exit()
+        sys.exit(1)
 
 
 def main():
@@ -310,7 +312,7 @@ def create_kms_client(ctx):
         return boto3.client('kms')
     except Exception as e:
         ctx.obj.unkown_error(e, "Error while trying to initialize aws kms client: '%s'")
-        exit()
+        sys.exit(1)
 
 
 def create_s3_transfer(ctx):
@@ -320,7 +322,7 @@ def create_s3_transfer(ctx):
         return S3Transfer(client)
     except Exception as e:
         ctx.obj.unkown_error(e, "Error while trying to initialize aws s3 transfer: '%s'")
-        exit()
+        sys.exit(1)
 
 
 def create_s3_resource(ctx):
@@ -329,7 +331,7 @@ def create_s3_resource(ctx):
         return boto3.resource('s3')
     except Exception as e:
         ctx.obj.unkown_error(e, "Error while trying to initialize aws s3 resource: '%s'")
-        exit()
+        sys.exit(1)
 
 
 def create_key_pair(keySize):
