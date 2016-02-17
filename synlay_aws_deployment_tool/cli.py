@@ -23,6 +23,7 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
 # TODO: ADT-3 - Refine codebase to work with Python 3
 
+
 @click.group(context_settings=CONTEXT_SETTINGS)
 @click.option('--debug', is_flag=True, default=False, help='Show the stacktrace when errors occur')
 @click.pass_context
