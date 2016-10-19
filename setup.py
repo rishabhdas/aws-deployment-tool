@@ -12,9 +12,8 @@ dependencies = [
 setup(
     name='synlay-aws-deployment-tool',
     version='0.1.0',
-    # TODO: ADT-5 - Consider to move project as open source project to GitHub
-    url='https://stash.synlay.com/projects/DEP/repos/aws-deployment-tools',
-    license='BSD',
+    url='https://github.com/synlay/aws-deployment-tool',
+    license='MIT',
     author='David Robakowski',
     author_email='david.robakowski@synlay.com',
     description='Synlay AWS Deployment Tool',
@@ -40,7 +39,7 @@ setup(
         # 'Development Status :: 7 - Inactive',
         'Environment :: Console',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: BSD License',
+        'License :: OSI Approved :: MIT License',
         'Operating System :: POSIX',
         'Operating System :: MacOS',
         'Operating System :: Unix',
