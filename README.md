@@ -6,7 +6,13 @@ Synlay AWS Deployment Tool
 # Installation
 
 If you don't use `pipsi`, you're missing out.
-Here are [installation instructions](https://github.com/mitsuhiko/pipsi#readme).
+Here are [installation instructions](https://github.com/mitsuhiko/pipsi#readme):
+
+    $ sudo port install virtualenv_select py27-virtualenv pip_select py27-pip
+    $ sudo port select --set virtualenv virtualenv27
+    $ sudo port select --set pip pip27
+    $ sudo port select --set python python27
+    $ curl https://raw.githubusercontent.com/mitsuhiko/pipsi/master/get-pipsi.py | python
 
 Simply run:
 
@@ -54,7 +60,7 @@ To use it:
 
 ### 2. Upload the encrypted private key file to the S3 bucket
 
-	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool upload_file_to_s3 --file=./private_key.sec --bucket=synlay-deployment-keys --bucket_filename=test_app_private_key.sec
+	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool upload_file_to_s3 --file=./private_key.sec --bucket=deployment-keys --bucket_filename=test_app_private_key.sec
 
 ### 3. Encrypt a data file using the public key file
 
@@ -65,10 +71,10 @@ A typical use case for this step would be a new release of the app with a new co
 
 ### 4. Upload the encrypted data file to the S3 bucket
 
-	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool upload_file_to_s3 --file=./encrypted_test_file.txt --bucket=synlay-deployment-data --bucket_filename=encrypted_test_file.txt
+	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool upload_file_to_s3 --file=./encrypted_test_file.txt --bucket=deployment-data --bucket_filename=encrypted_test_file.txt
 
 ### 5. Decrypt the data file and private key file from a S3 bucket
 
 Typically done on the server side as a bootstrap process while deploying a new app/server instance.
 
-	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool decrypt --project=TestApp --configuration-deployment-path=./decrypted_test_file.txt --key-bucket=synlay-deployment-keys --key-bucket-filename=test_app_private_key.sec --data-bucket=synlay-deployment-data --data-bucket-filename=encrypted_test_file.txt
+	AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=eu-central-1 synlay-aws-deployment-tool decrypt --project=TestApp --configuration-deployment-path=./decrypted_test_file.txt --key-bucket=deployment-keys --key-bucket-filename=test_app_private_key.sec --data-bucket=deployment-data --data-bucket-filename=encrypted_test_file.txt
